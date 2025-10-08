@@ -1,8 +1,10 @@
-# Python.py
+# python.py
 
 import streamlit as st
 import pandas as pd
 from google import genai
+# Lưu ý: Cần import đối tượng 'types' từ thư viện genai
+from google.genai import types
 from google.genai.errors import APIError
 
 # --- Cấu hình Trang Streamlit ---
@@ -16,7 +18,7 @@ st.title("Ứng dụng Phân Tích Báo Cáo Tài Chính 📊")
 # KHAI BÁO BIẾN TOÀN CỤC CHO GEMINI CHAT
 MODEL_NAME = 'gemini-2.5-flash'
 
-# Hàm khởi tạo client và chat session (Chỉ chạy 1 lần)
+# Hàm khởi tạo client và chat session (SỬA LỖI SYSTEM_INSTRUCTION TẠI ĐÂY)
 @st.cache_resource
 def get_gemini_chat_session(api_key):
     """Khởi tạo và trả về client và chat session cho Gemini."""
@@ -24,22 +26,28 @@ def get_gemini_chat_session(api_key):
         # 1. Khởi tạo Client
         client = genai.Client(api_key=api_key)
         
-        # 2. Khởi tạo Chat Session
-        # Tạo prompt hệ thống để định hướng cho AI trong cuộc hội thoại
+        # 2. Định nghĩa System Instruction
         system_instruction = (
             "Bạn là một trợ lý tài chính thông minh. "
             "Hãy trả lời các câu hỏi về tài chính, kinh tế, hoặc các câu hỏi chung. "
             "Nếu người dùng yêu cầu phân tích dữ liệu tài chính (Báo cáo Tài chính, Bảng cân đối), "
             "hãy nhắc họ sử dụng Chức năng 5 hoặc cung cấp chi tiết về dữ liệu cần phân tích."
         )
+
+        # 3. Tạo GenerationConfig để chứa system_instruction
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction
+        )
         
+        # 4. Khởi tạo Chat Session với config mới
         chat = client.chats.create(
             model=MODEL_NAME,
-            system_instruction=system_instruction
+            config=config # Truyền cấu hình vào đây thay vì truyền trực tiếp system_instruction
         )
         return client, chat
     except Exception as e:
-        st.error(f"Lỗi khởi tạo Gemini Client hoặc Chat: {e}. Vui lòng kiểm tra Khóa API.")
+        # st.error sẽ hiển thị lỗi chi tiết hơn, bao gồm cả lỗi thiếu 'types' nếu chưa import
+        st.error(f"Lỗi khởi tạo Gemini Client hoặc Chat: {e}. Vui lòng kiểm tra Khóa API và đảm bảo thư viện google-genai đã được cài đặt và cập nhật.")
         return None, None
     
 
@@ -231,6 +239,7 @@ if not api_key:
     st.error("Không tìm thấy Khóa API 'GEMINI_API_KEY' cho tính năng chat. Vui lòng cấu hình Secrets.")
 else:
     # 2. Khởi tạo Gemini Client và Chat Session
+    # KHÔNG CẦN THAY ĐỔI Ở ĐÂY VÌ HÀM GỌI ĐÃ ĐƯỢC CẬP NHẬT Ở TRÊN
     client, chat = get_gemini_chat_session(api_key)
     
     if chat:
@@ -268,4 +277,3 @@ else:
                         error_message = f"Đã xảy ra lỗi không xác định: {e}"
                         st.error(error_message)
                         st.session_state["messages"].append({"role": "assistant", "content": error_message})
-  
