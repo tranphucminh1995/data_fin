@@ -174,7 +174,88 @@ if uploaded_file is not None:
                         st.markdown("**Kết quả Phân tích từ Gemini AI:**")
                         st.info(ai_result)
                 else:
-                     st.error("Lỗi: Không tìm thấy Khóa API. Vui lòng cấu hình Khóa 'GEMINI_API_KEY' trong Streamlit Secrets.")
+                    st.error("Lỗi: Không tìm thấy Khóa API. Vui lòng cấu hình Khóa 'GEMINI_API_KEY' trong Streamlit Secrets.")
+
+
+            # ====================================================================================
+            # --- CHỨC NĂNG MỚI: 6. KHUNG CHAT HỎI ĐÁP AI ---
+            # ====================================================================================
+            st.divider() # Phân tách với phần cũ
+            st.subheader("6. Khung Chat Hỏi Đáp AI 💬")
+            
+            # Khởi tạo lịch sử chat
+            if "messages" not in st.session_state:
+                st.session_state["messages"] = [
+                    {
+                        "role": "model", 
+                        "content": "Chào bạn! Bạn có thể hỏi tôi bất cứ điều gì về dữ liệu tài chính vừa được tải lên."
+                    }
+                ]
+                
+            # Chuẩn bị Prompt hệ thống để cung cấp ngữ cảnh (data_for_ai)
+            # Dùng st.cache_resource để giữ nguyên model/chat_session giữa các lần tương tác
+            @st.cache_resource
+            def setup_gemini_chat(data_context):
+                """Khởi tạo client và đối tượng chat với ngữ cảnh dữ liệu."""
+                try:
+                    api_key = st.secrets.get("GEMINI_API_KEY")
+                    if not api_key:
+                        st.error("Lỗi: Không tìm thấy Khóa API 'GEMINI_API_KEY'. Không thể khởi tạo chat.")
+                        return None
+                        
+                    client = genai.Client(api_key=api_key)
+                    model_name = 'gemini-2.5-flash' 
+                    
+                    # Cung cấp ngữ cảnh là dữ liệu tài chính đã được xử lý
+                    system_instruction = f"""
+                    Bạn là một trợ lý phân tích tài chính chuyên nghiệp. Nhiệm vụ của bạn là trả lời các câu hỏi 
+                    của người dùng dựa trên Báo cáo Tài chính đã được xử lý và tính toán sau:
+                    
+                    DỮ LIỆU TÀI CHÍNH ĐÃ PHÂN TÍCH:
+                    {data_context}
+                    
+                    Hãy giữ câu trả lời ngắn gọn, chính xác, và chỉ dựa vào dữ liệu trên. 
+                    Nếu người dùng hỏi về dữ liệu không có, hãy trả lời là bạn không biết.
+                    """
+                    
+                    # Bắt đầu phiên trò chuyện với hướng dẫn hệ thống
+                    chat = client.chats.create(
+                        model=model_name,
+                        system_instruction=system_instruction
+                    )
+                    return chat
+                except Exception as e:
+                    st.error(f"Lỗi khởi tạo Gemini Chat: {e}")
+                    return None
+            
+            # Lấy đối tượng chat
+            chat_session = setup_gemini_chat(data_for_ai)
+            
+            if chat_session:
+                # Hiển thị lịch sử chat
+                for message in st.session_state["messages"]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+                
+                # Xử lý input từ người dùng
+                if prompt := st.chat_input("Hỏi Gemini về báo cáo tài chính..."):
+                    # 1. Thêm tin nhắn người dùng vào lịch sử
+                    st.session_state["messages"].append({"role": "user", "content": prompt})
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                        
+                    # 2. Gửi tin nhắn đến Gemini và hiển thị phản hồi
+                    with st.chat_message("model"):
+                        with st.spinner("Đang suy nghĩ..."):
+                            try:
+                                # Dùng hàm send_message của chat session để duy trì ngữ cảnh
+                                response = chat_session.send_message(prompt) 
+                                st.markdown(response.text)
+                                # 3. Thêm phản hồi của Gemini vào lịch sử
+                                st.session_state["messages"].append({"role": "model", "content": response.text})
+                            except Exception as e:
+                                st.error(f"Lỗi gửi tin nhắn: {e}")
+                                st.session_state["messages"].append({"role": "model", "content": "Rất tiếc, đã xảy ra lỗi khi xử lý yêu cầu của bạn."})
 
     except ValueError as ve:
         st.error(f"Lỗi cấu trúc dữ liệu: {ve}")
